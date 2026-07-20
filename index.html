@@ -189,7 +189,7 @@
     let score = 0;
     let lives = 5;
     let spawnTimer = 0;
-    let spawnInterval = 110; // frames
+    let spawnInterval = 140; // frames adjusted for slower gameplay
     let frameCount = 0;
 
     // Freeze Effect State
@@ -213,6 +213,9 @@
     let items = [];
     let particles = [];
     let splatters = [];
+
+    // Speed multiplier (50% slower than previous 0.3x = 0.15x)
+    const SPEED_MULT = 0.15;
 
     // Class Definitions
     class Item {
@@ -238,19 +241,18 @@
             this.x = Math.random() * (canvas.width - 160) + 80;
             this.y = canvas.height + this.radius;
 
-            // Velocity scaled down by ~0.3x for slower floats
             const targetX = canvas.width / 2 + (Math.random() * 200 - 100);
             const targetY = Math.random() * 150 + 100;
             
-            const timeToPeak = (45 + Math.random() * 15) / 0.3; // Extended flight duration
-            this.vx = ((targetX - this.x) / (timeToPeak * 2)) * 0.3;
+            const timeToPeak = (45 + Math.random() * 15) / SPEED_MULT; // Extended flight duration
+            this.vx = ((targetX - this.x) / (timeToPeak * 2)) * SPEED_MULT;
             
-            // Reduced gravity & lower initial upward velocity (0.3x multiplier)
-            this.gravity = 0.35 * 0.3;
+            // Reduced gravity & lower initial upward velocity
+            this.gravity = 0.35 * SPEED_MULT;
             this.vy = -Math.sqrt(2 * this.gravity * (canvas.height - targetY));
 
             this.rotation = 0;
-            this.vRot = ((Math.random() - 0.5) * 0.1) * 0.3;
+            this.vRot = ((Math.random() - 0.5) * 0.1) * SPEED_MULT;
             this.sliced = false;
         }
 
@@ -347,10 +349,10 @@
             this.radius = type.radius;
             
             this.vx = (vx + (isLeft ? -2 : 2) + (Math.random() - 0.5)) * 0.5;
-            this.vy = (-2 - Math.random() * 2) * 0.3;
-            this.gravity = 0.35 * 0.3;
+            this.vy = (-2 - Math.random() * 2) * SPEED_MULT;
+            this.gravity = 0.35 * SPEED_MULT;
             this.rotation = Math.random() * Math.PI;
-            this.vRot = ((isLeft ? -0.15 : 0.15) + (Math.random() - 0.5) * 0.05) * 0.3;
+            this.vRot = ((isLeft ? -0.15 : 0.15) + (Math.random() - 0.5) * 0.05) * SPEED_MULT;
         }
 
         update() {
@@ -393,12 +395,13 @@
             this.radius = Math.random() * 4 + 2;
             this.vx = (Math.random() - 0.5) * 8;
             this.vy = (Math.random() - 0.5) * 8;
-            this.gravity = 0.1;
+            this.gravity = 0.2; // Full normal speed gravity
             this.alpha = 1;
-            this.decay = Math.random() * 0.03 + 0.015;
+            this.decay = Math.random() * 0.03 + 0.015; // Full normal speed decay
         }
 
         update() {
+            // Explosions and juice particles update even during freeze!
             this.x += this.vx;
             this.y += this.vy;
             this.vy += this.gravity;
@@ -541,7 +544,7 @@
         items.push(new HalfFruit(fruit.x, fruit.y, fruit.type, true, fruit.vx));
         items.push(new HalfFruit(fruit.x, fruit.y, fruit.type, false, fruit.vx));
 
-        // Spawn Juice Particles
+        // Spawn Juice Particles (Explosion FX runs at normal speed)
         for (let i = 0; i < 14; i++) {
             particles.push(new Particle(fruit.x, fruit.y, fruit.type.innerColor));
         }
@@ -566,7 +569,7 @@
 
     function startGame() {
         score = 0;
-        lives = 5; // Updated to 5 lives
+        lives = 5;
         items = [];
         particles = [];
         splatters = [];
@@ -648,7 +651,7 @@
             }
         }
 
-        // Particles
+        // Particles - updated continuously regardless of freeze
         for (let i = particles.length - 1; i >= 0; i--) {
             const p = particles[i];
             p.update();
