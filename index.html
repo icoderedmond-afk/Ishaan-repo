@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fruit Ninja - HTML5 Canvas</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            background: #111;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            color: #fff;
+        }
+        #game-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            box-shadow: 0 12px 35px rgba(0,0,0,0.9);
+            border-radius: 16px;
+            overflow: hidden;
+            /* Wood Chopping Board styling via CSS gradients */
+            background: 
+                radial-gradient(ellipse at center, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.4) 100%),
+                repeating-linear-gradient(
+                    0deg,
+                    #704214,
+                    #704214 40px,
+                    #5c3410 40px,
+                    #5c3410 80px,
+                    #824e18 80px,
+                    #824e18 120px
+                );
+            border: 12px solid #3d230a;
+            transition: border-color 0.3s ease;
+        }
+        #game-container.frozen {
+            border-color: #00d2d3;
+            box-shadow: 0 0 30px rgba(0, 210, 211, 0.6);
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+        }
+        .hud {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.9);
+        }
+        .score-board {
+            color: #f1c40f;
+        }
+        .lives-board {
+            color: #e74c3c;
+            letter-spacing: 3px;
+            font-size: 20px;
+        }
+        .freeze-indicator {
+            position: absolute;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #00d2d3;
+            font-size: 20px;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(0,210,211,0.8);
+            display: none;
+        }
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+            backdrop-filter: blur(4px);
+        }
+        .title {
+            font-size: 56px;
+            font-weight: 900;
+            color: #e74c3c;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            text-shadow: 0 4px 10px rgba(231, 76, 60, 0.5), 3px 3px 0px #000;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            font-size: 18px;
+            color: #bdc3c7;
+            margin-bottom: 30px;
+            text-align: center;
+            max-width: 80%;
+        }
+        .btn {
+            padding: 14px 40px;
+            font-size: 22px;
+            font-weight: bold;
+            color: #fff;
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(46, 204, 113, 0.4);
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .btn:hover {
+            transform: translateY(-2px) scale(1.05);
+            box-shadow: 0 8px 25px rgba(46, 204, 113, 0.6);
+        }
+        .btn:active {
+            transform: translateY(1px) scale(0.98);
+        }
+        .hidden {
+            display: none !important;
+        }
+        .game-over-score {
+            font-size: 28px;
+            color: #f1c40f;
+            margin-bottom: 25px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    
+    <div class="ui-layer">
+        <div class="hud">
+            <div class="score-board">🍉 <span id="scoreText">0</span></div>
+            <div class="lives-board" id="livesText">❌ ❌ ❌ ❌ ❌</div>
+        </div>
+        <div id="freezeIndicator" class="freeze-indicator">❄️ FROZEN! ❄️</div>
+    </div>
+
+    <!-- Start Menu Overlay -->
+    <div id="startOverlay" class="overlay">
+        <h1 class="title">Fruit Ninja</h1>
+        <p class="subtitle">Slice fruits with your mouse or finger. Avoid bombs & watch for the Ice Banana!</p>
+        <button class="btn" onclick="startGame()">Play Game</button>
+    </div>
+
+    <!-- Game Over Overlay -->
+    <div id="gameOverOverlay" class="overlay hidden">
+        <h1 class="title" style="color: #e74c3c;">Game Over</h1>
+        <div class="game-over-score">Final Score: <span id="finalScore">0</span></div>
+        <button class="btn" onclick="startGame()">Try Again</button>
+    </div>
+</div>
+
+<script>
+    const gameContainer = document.getElementById('game-container');
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // UI elements
+    const scoreText = document.getElementById('scoreText');
+    const livesText = document.getElementById('livesText');
+    const freezeIndicator = document.getElementById('freezeIndicator');
+    const startOverlay = document.getElementById('startOverlay');
+    const gameOverOverlay = document.getElementById('gameOverOverlay');
+    const finalScore = document.getElementById('finalScore');
+
+    // Game state
+    let gameActive = false;
+    let score = 0;
+    let lives = 5;
+    let spawnTimer = 0;
+    let spawnInterval = 140; // frames
+    let frameCount = 0;
+
+    // Freeze Effect State
+    const TOTAL_FREEZE_TIME = 5000;
+    let freezeTimer = 0; // Milliseconds remaining for freeze effect
+
+    // Slicer Blade Trail
+    let bladeTrail = [];
+    let isMouseDown = false;
+
+    // Fruit definitions with multi-tone colors, shading accents, and details
+    const FRUIT_TYPES = [
+        { name: 'watermelon', color: '#1e824c', darkColor: '#145a32', innerColor: '#e74c3c', radius: 35, score: 10, stripeColor: '#0e3a21' },
+        { name: 'orange', color: '#f39c12', darkColor: '#d35400', innerColor: '#e67e22', radius: 28, score: 10 },
+        { name: 'apple', color: '#e74c3c', darkColor: '#922b21', innerColor: '#f9e79f', radius: 25, score: 10 },
+        { name: 'lemon', color: '#f4d03f', darkColor: '#b7950b', innerColor: '#fef9e7', radius: 22, score: 15 },
+        { name: 'coconut', color: '#5d4037', darkColor: '#3e2723', innerColor: '#f5f5f5', radius: 30, score: 15 }
+    ];
+
+    const ICE_BANANA_TYPE = { name: 'ice_banana', color: '#f1c40f', innerColor: '#00d2d3', radius: 26, score: 25, isSpecial: true };
+
+    let items = [];
+    let particles = [];
+    let splatters = [];
+
+    // Speed multiplier (0.15x)
+    const SPEED_MULT = 0.15;
+
+    // Draw realistic wooden cutting board texture onto canvas
+    function drawWoodTexture() {
+        // Base Wood Color
+        ctx.fillStyle = '#6b3e15';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Wood Planks & Grain lines
+        const plankHeight = 80;
+        for (let y = 0; y < canvas.height; y += plankHeight) {
+            // Plank Divider Shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.fillRect(0, y, canvas.width, 3);
+
+            // Grain lines
+            ctx.strokeStyle = 'rgba(40, 20, 5, 0.12)';
+            ctx.lineWidth = 2;
+            for (let i = 5; i < plankHeight; i += 12) {
+                ctx.beginPath();
+                ctx.moveTo(0, y + i);
+                ctx.bezierCurveTo(canvas.width * 0.3, y + i + 4, canvas.width * 0.7, y + i - 4, canvas.width, y + i);
+                ctx.stroke();
+            }
+        }
+
+        // Outer Board Inner Shadow / Groove
+        ctx.strokeStyle = 'rgba(30, 15, 0, 0.4)';
+        ctx.lineWidth = 14;
+        ctx.strokeRect(15, 15, canvas.width - 30, canvas.height - 30);
+
+        ctx.strokeStyle = 'rgba(255, 200, 150, 0.15)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(22, 22, canvas.width - 44, canvas.height - 44);
+    }
+
+    // Class Definitions
+    class Item {
+        constructor() {
+            const rand = Math.random();
+            this.isBomb = rand < 0.18; // 18% chance of bomb
+            this.isIceBanana = !this.isBomb && rand > 0.85; // 15% chance of Ice Banana
+
+            if (this.isBomb) {
+                this.radius = 25;
+                this.color = '#333';
+            } else if (this.isIceBanana) {
+                this.type = ICE_BANANA_TYPE;
+                this.radius = this.type.radius;
+                this.color = this.type.color;
+            } else {
+                this.type = FRUIT_TYPES[Math.floor(Math.random() * FRUIT_TYPES.length)];
+                this.radius = this.type.radius;
+                this.color = this.type.color;
+            }
+
+            // Spawn position (bottom edge)
+            this.x = Math.random() * (canvas.width - 160) + 80;
+            this.y = canvas.height + this.radius;
+
+            const targetX = canvas.width / 2 + (Math.random() * 200 - 100);
+            const targetY = Math.random() * 150 + 100;
+            
+            const timeToPeak = (45 + Math.random() * 15) / SPEED_MULT;
+            this.vx = ((targetX - this.x) / (timeToPeak * 2)) * SPEED_MULT;
+            
+            this.gravity = 0.35 * SPEED_MULT;
+            this.vy = -Math.sqrt(2 * this.gravity * (canvas.height - targetY));
+
+            this.rotation = 0;
+            this.vRot = ((Math.random() - 0.5) * 0.1) * SPEED_MULT;
+            this.sliced = false;
+        }
+
+        update() {
+            if (freezeTimer > 0) return;
+
+            this.x += this.vx;
+            this.y += this.vy;
+            this.vy += this.gravity;
+            this.rotation += this.vRot;
+        }
+
+        draw() {
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.rotation);
+
+            if (this.isBomb) {
+                // Spherical Bomb with Shading
+                const bgGrad = ctx.createRadialGradient(-this.radius * 0.3, -this.radius * 0.3, 2, 0, 0, this.radius);
+                bgGrad.addColorStop(0, '#555');
+                bgGrad.addColorStop(0.5, '#222');
+                bgGrad.addColorStop(1, '#050505');
+
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = bgGrad;
+                ctx.fill();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#444';
+                ctx.stroke();
+
+                // Fuse Cap & Fuse
+                ctx.fillStyle = '#888';
+                ctx.fillRect(-4, -this.radius - 2, 8, 4);
+
+                ctx.beginPath();
+                ctx.moveTo(0, -this.radius - 2);
+                ctx.quadraticCurveTo(10, -this.radius - 12, 5, -this.radius - 18);
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = '#a67c52';
+                ctx.stroke();
+
+                // Fuse Spark Glow
+                ctx.beginPath();
+                ctx.arc(5, -this.radius - 18, 6 + Math.random() * 2, 0, Math.PI * 2);
+                ctx.fillStyle = Math.random() > 0.5 ? 'rgba(243, 156, 18, 0.8)' : 'rgba(231, 76, 60, 0.8)';
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.arc(5, -this.radius - 18, 3, 0, Math.PI * 2);
+                ctx.fillStyle = '#fff';
+                ctx.fill();
+            } else if (this.isIceBanana) {
+                // Blue & Yellow Striped Ice Banana with shading
+                const w = this.radius * 2.3;
+                const h = this.radius * 1.1;
+
+                ctx.beginPath();
+                ctx.ellipse(0, 0, w / 2, h / 2, Math.PI / 6, 0, Math.PI * 2);
+                
+                ctx.save();
+                ctx.clip();
+                
+                ctx.fillStyle = '#f1c40f';
+                ctx.fillRect(-w, -h, w * 2, h * 2);
+
+                ctx.fillStyle = '#00d2d3';
+                for (let i = -w; i < w; i += 12) {
+                    ctx.beginPath();
+                    ctx.rect(i, -h, 6, h * 2);
+                    ctx.fill();
+                }
+
+                const bananaGrad = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+                bananaGrad.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
+                bananaGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0)');
+                bananaGrad.addColorStop(1, 'rgba(0, 0, 0, 0.45)');
+                
+                ctx.fillStyle = bananaGrad;
+                ctx.fillRect(-w, -h, w * 2, h * 2);
+                ctx.restore();
+
+                ctx.fillStyle = '#00778a';
+                ctx.beginPath();
+                ctx.arc(-w/2.1, h/4, 4, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#00a8a8';
+                ctx.stroke();
+            } else {
+                // Standard Fruit
+                const r = this.radius;
+                const grad = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r);
+                grad.addColorStop(0, '#ffffff');
+                grad.addColorStop(0.2, this.type.color);
+                grad.addColorStop(0.85, this.type.darkColor);
+                grad.addColorStop(1, '#000000');
+
+                ctx.beginPath();
+                ctx.arc(0, 0, r, 0, Math.PI * 2);
+                ctx.fillStyle = grad;
+                ctx.fill();
+
+                if (this.type.name === 'watermelon') {
+                    ctx.save();
+                    ctx.clip();
+                    ctx.strokeStyle = this.type.stripeColor;
+                    ctx.lineWidth = 4;
+                    for (let a = -Math.PI; a < Math.PI; a += Math.PI / 3) {
+                        ctx.beginPath();
+                        ctx.arc(0, 0, r - 3, a, a + Math.PI / 6);
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                } else if (this.type.name === 'coconut') {
+                    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                    ctx.beginPath();
+                    ctx.arc(-6, -6, 3, 0, Math.PI * 2);
+                    ctx.arc(4, -8, 2.5, 0, Math.PI * 2);
+                    ctx.arc(-1, 2, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (this.type.name === 'apple' || this.type.name === 'lemon') {
+                    ctx.fillStyle = '#27ae60';
+                    ctx.beginPath();
+                    ctx.ellipse(0, -r + 2, 5, 2.5, -Math.PI / 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.beginPath();
+                ctx.arc(-r * 0.35, -r * 0.35, r * 0.25, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+    }
+
+    class HalfFruit {
+        constructor(x, y, type, isLeft, vx) {
+            this.x = x;
+            this.y = y;
+            this.type = type;
+            this.isLeft = isLeft;
+            this.radius = type.radius;
+            this.isHalf = true;
+            
+            this.vx = (vx + (isLeft ? -2 : 2) + (Math.random() - 0.5)) * 0.5;
+            this.vy = (-2 - Math.random() * 2) * SPEED_MULT;
+            this.gravity = 0.35 * SPEED_MULT;
+            this.rotation = Math.random() * Math.PI;
+            this.vRot = ((isLeft ? -0.15 : 0.15) + (Math.random() - 0.5) * 0.05) * SPEED_MULT;
+        }
+
+        update() {
+            if (freezeTimer > 0) return;
+
+            this.x += this.vx;
+            this.y += this.vy;
+            this.vy += this.gravity;
+            this.rotation += this.vRot;
+        }
+
+        draw() {
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.rotation);
+
+            const r = this.radius;
+
+            const peelGrad = ctx.createRadialGradient(-r * 0.2, -r * 0.2, r * 0.1, 0, 0, r);
+            peelGrad.addColorStop(0, this.type.color);
+            peelGrad.addColorStop(1, this.type.darkColor || '#111');
+
+            ctx.beginPath();
+            ctx.arc(0, 0, r, this.isLeft ? Math.PI / 2 : -Math.PI / 2, this.isLeft ? -Math.PI / 2 : Math.PI / 2);
+            ctx.closePath();
+            ctx.fillStyle = peelGrad;
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(0, 0, r * 0.82, this.isLeft ? Math.PI / 2 : -Math.PI / 2, this.isLeft ? -Math.PI / 2 : Math.PI / 2);
+            ctx.closePath();
+            ctx.fillStyle = this.type.innerColor;
+            ctx.fill();
+
+            if (this.type.name === 'watermelon' || this.type.name === 'apple') {
+                ctx.fillStyle = '#222';
+                const sideMult = this.isLeft ? -1 : 1;
+                ctx.beginPath();
+                ctx.arc(sideMult * r * 0.3, -r * 0.2, 2, 0, Math.PI * 2);
+                ctx.arc(sideMult * r * 0.4, r * 0.2, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+    }
+
+    class Particle {
+        constructor(x, y, color) {
+            this.x = x;
+            this.y = y;
+            this.color = color;
+            this.radius = Math.random() * 4 + 2;
+            this.vx = (Math.random() - 0.5) * 8;
+            this.vy = (Math.random() - 0.5) * 8;
+            this.gravity = 0.2;
+            this.alpha = 1;
+            this.decay = Math.random() * 0.03 + 0.015;
+        }
+
+        update() {
+            this.x += this.vx;
+            this.y += this.vy;
+            this.vy += this.gravity;
+            this.alpha -= this.decay;
+        }
+
+        draw() {
+            ctx.save();
+            ctx.globalAlpha = Math.max(0, this.alpha);
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.fillStyle = this.color;
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    // Organic, misshapen juice splat class
+    class Splatter {
+        constructor(x, y, color) {
+            this.x = x;
+            this.y = y;
+            this.color = color;
+            this.alpha = 0.55;
+            
+            // Generate misshapen splat points relative to center
+            this.baseRadius = Math.random() * 18 + 20;
+            this.numPoints = Math.floor(Math.random() * 6) + 10; // 10 to 15 points
+            this.points = [];
+
+            for (let i = 0; i < this.numPoints; i++) {
+                const angle = (i / this.numPoints) * Math.PI * 2;
+                // Random variation for irregular splat contour
+                const dist = this.baseRadius * (0.4 + Math.random() * 0.8);
+                this.points.push({
+                    x: Math.cos(angle) * dist,
+                    y: Math.sin(angle) * dist
+                });
+            }
+
+            // Small satellite droplets around the main splat
+            this.droplets = [];
+            const numDroplets = Math.floor(Math.random() * 5) + 3;
+            for (let i = 0; i < numDroplets; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = this.baseRadius * (1.2 + Math.random() * 0.8);
+                this.droplets.push({
+                    x: Math.cos(angle) * dist,
+                    y: Math.sin(angle) * dist,
+                    r: Math.random() * 3 + 1.5
+                });
+            }
+        }
+
+        draw() {
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.globalAlpha = this.alpha;
+            ctx.fillStyle = this.color;
+
+            // Draw organic misshapen splat path using smooth bezier curves
+            ctx.beginPath();
+            ctx.moveTo(this.points[0].x, this.points[0].y);
+
+            for (let i = 0; i < this.numPoints; i++) {
+                const p1 = this.points[i];
+                const p2 = this.points[(i + 1) % this.numPoints];
+                const midX = (p1.x + p2.x) / 2;
+                const midY = (p1.y + p2.y) / 2;
+
+                ctx.quadraticCurveTo(p1.x, p1.y, midX, midY);
+            }
+            ctx.closePath();
+            ctx.fill();
+
+            // Draw satellite droplets
+            this.droplets.forEach(d => {
+                ctx.beginPath();
+                ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            ctx.restore();
+        }
+    }
+
+    // Input Handling
+    function addBladePoint(x, y) {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = (x - rect.left) * (canvas.width / rect.width);
+        const mouseY = (y - rect.top) * (canvas.height / rect.height);
+
+        bladeTrail.push({ x: mouseX, y: mouseY, time: Date.now() });
+    }
+
+    window.addEventListener('mousedown', (e) => {
+        isMouseDown = true;
+        bladeTrail = [];
+        addBladePoint(e.clientX, e.clientY);
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (isMouseDown) {
+            addBladePoint(e.clientX, e.clientY);
+            checkSlices();
+        }
+    });
+
+    window.addEventListener('mouseup', () => { isMouseDown = false; });
+
+    // Touch support
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        isMouseDown = true;
+        bladeTrail = [];
+        const touch = e.touches[0];
+        addBladePoint(touch.clientX, touch.clientY);
+    });
+
+    canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (isMouseDown) {
+            const touch = e.touches[0];
+            addBladePoint(touch.clientX, touch.clientY);
+            checkSlices();
+        }
+    });
+
+    canvas.addEventListener('touchend', () => { isMouseDown = false; });
+
+    function lineIntersectsCircle(p1, p2, circle) {
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len === 0) return false;
+
+        const u = ((circle.x - p1.x) * dx + (circle.y - p1.y) * dy) / (len * len);
+        const clampedU = Math.max(0, Math.min(1, u));
+
+        const nearestX = p1.x + clampedU * dx;
+        const nearestY = p1.y + clampedU * dy;
+
+        const distX = circle.x - nearestX;
+        const distY = circle.y - nearestY;
+
+        return (distX * distX + distY * distY) < (circle.radius * circle.radius);
+    }
+
+    function checkSlices() {
+        if (bladeTrail.length < 2 || !gameActive) return;
+
+        const p1 = bladeTrail[bladeTrail.length - 2];
+        const p2 = bladeTrail[bladeTrail.length - 1];
+
+        for (let i = items.length - 1; i >= 0; i--) {
+            const item = items[i];
+            
+            if (item.isHalf) continue;
+
+            if (lineIntersectsCircle(p1, p2, item)) {
+                if (item.isBomb) {
+                    explodeBomb(item.x, item.y);
+                    endGame();
+                    return;
+                } else {
+                    sliceFruit(item, i);
+                }
+            }
+        }
+    }
+
+    function sliceFruit(fruit, index) {
+        items.splice(index, 1);
+        score += fruit.type.score;
+        scoreText.innerText = score;
+
+        if (fruit.isIceBanana) {
+            freezeTimer = TOTAL_FREEZE_TIME;
+            gameContainer.classList.add('frozen');
+            freezeIndicator.style.display = 'block';
+        }
+
+        splatters.push(new Splatter(fruit.x, fruit.y, fruit.type.innerColor));
+        if (splatters.length > 10) splatters.shift();
+
+        items.push(new HalfFruit(fruit.x, fruit.y, fruit.type, true, fruit.vx));
+        items.push(new HalfFruit(fruit.x, fruit.y, fruit.type, false, fruit.vx));
+
+        for (let i = 0; i < 14; i++) {
+            particles.push(new Particle(fruit.x, fruit.y, fruit.type.innerColor));
+        }
+    }
+
+    function explodeBomb(x, y) {
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        for (let i = 0; i < 40; i++) {
+            particles.push(new Particle(x, y, Math.random() > 0.5 ? '#f39c12' : '#e74c3c'));
+        }
+    }
+
+    function updateLivesUI() {
+        let text = '';
+        for (let i = 0; i < 5; i++) {
+            text += (i < lives) ? '❌ ' : '⚪ ';
+        }
+        livesText.innerText = text.trim();
+    }
+
+    function startGame() {
+        score = 0;
+        lives = 5;
+        items = [];
+        particles = [];
+        splatters = [];
+        bladeTrail = [];
+        frameCount = 0;
+        freezeTimer = 0;
+        gameActive = true;
+
+        gameContainer.classList.remove('frozen');
+        freezeIndicator.style.display = 'none';
+
+        scoreText.innerText = score;
+        updateLivesUI();
+
+        startOverlay.classList.add('hidden');
+        gameOverOverlay.classList.add('hidden');
+    }
+
+    function endGame() {
+        gameActive = false;
+        finalScore.innerText = score;
+        gameOverOverlay.classList.remove('hidden');
+        gameContainer.classList.remove('frozen');
+        freezeIndicator.style.display = 'none';
+    }
+
+    // Dynamic melting ice border & frost vignette
+    function drawIceVignette(ratio) {
+        ctx.save();
+        
+        const w = canvas.width;
+        const h = canvas.height;
+        const maxBorder = 70 * ratio;
+
+        const vignetteGrad = ctx.createRadialGradient(
+            w / 2, h / 2, Math.min(w, h) * 0.3,
+            w / 2, h / 2, Math.max(w, h) * 0.6
+        );
+        vignetteGrad.addColorStop(0, 'rgba(0, 210, 211, 0)');
+        vignetteGrad.addColorStop(0.7, `rgba(0, 210, 211, ${0.15 * ratio})`);
+        vignetteGrad.addColorStop(1, `rgba(224, 255, 255, ${0.45 * ratio})`);
+
+        ctx.fillStyle = vignetteGrad;
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.fillStyle = `rgba(220, 245, 255, ${0.75 * ratio})`;
+        ctx.strokeStyle = `rgba(0, 210, 211, ${0.9 * ratio})`;
+        ctx.lineWidth = 3;
+
+        // Top Ice Edge
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        for (let x = 0; x <= w; x += 25) {
+            const jagged = Math.sin(x * 0.05 + freezeTimer * 0.002) * 15 * ratio;
+            ctx.lineTo(x, maxBorder + jagged);
+        }
+        ctx.lineTo(w, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Bottom Ice Edge
+        ctx.beginPath();
+        ctx.moveTo(0, h);
+        for (let x = 0; x <= w; x += 25) {
+            const jagged = Math.cos(x * 0.05 + freezeTimer * 0.002) * 15 * ratio;
+            ctx.lineTo(x, h - maxBorder - jagged);
+        }
+        ctx.lineTo(w, h);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Left Ice Edge
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        for (let y = 0; y <= h; y += 25) {
+            const jagged = Math.sin(y * 0.05 + freezeTimer * 0.002) * 15 * ratio;
+            ctx.lineTo(maxBorder + jagged, y);
+        }
+        ctx.lineTo(0, h);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Right Ice Edge
+        ctx.beginPath();
+        ctx.moveTo(w, 0);
+        for (let y = 0; y <= h; y += 25) {
+            const jagged = Math.cos(y * 0.05 + freezeTimer * 0.002) * 15 * ratio;
+            ctx.lineTo(w - maxBorder - jagged, y);
+        }
+        ctx.lineTo(w, h);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
+    let lastTime = performance.now();
+
+    // Main Game Loop
+    function gameLoop(currentTime) {
+        const deltaTime = currentTime - lastTime;
+        lastTime = currentTime;
+
+        if (freezeTimer > 0) {
+            freezeTimer -= deltaTime;
+            if (freezeTimer <= 0) {
+                freezeTimer = 0;
+                gameContainer.classList.remove('frozen');
+                freezeIndicator.style.display = 'none';
+            }
+        }
+
+        // Draw Wood Chopping Board Background Texture
+        drawWoodTexture();
+
+        // Render Organic Splatters onto the wood
+        splatters.forEach(s => s.draw());
+
+        if (gameActive) {
+            if (freezeTimer <= 0) {
+                frameCount++;
+                if (frameCount % spawnInterval === 0) {
+                    const count = Math.floor(Math.random() * 2) + 1;
+                    for (let i = 0; i < count; i++) {
+                        items.push(new Item());
+                    }
+                }
+            }
+
+            for (let i = items.length - 1; i >= 0; i--) {
+                const item = items[i];
+                item.update();
+                item.draw();
+
+                if (item.y - item.radius > canvas.height + 50) {
+                    if (!item.isBomb && !item.isHalf) {
+                        lives--;
+                        updateLivesUI();
+                        if (lives <= 0) {
+                            endGame();
+                        }
+                    }
+                    items.splice(i, 1);
+                }
+            }
+        }
+
+        // Render Melting Ice Overlay when Frozen
+        if (freezeTimer > 0) {
+            const freezeRatio = Math.max(0, freezeTimer / TOTAL_FREEZE_TIME);
+            drawIceVignette(freezeRatio);
+        }
+
+        // Particles
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.update();
+            p.draw();
+            if (p.alpha <= 0) particles.splice(i, 1);
+        }
+
+        // Draw Blade Trail
+        const now = Date.now();
+        bladeTrail = bladeTrail.filter(p => now - p.time < 150);
+
+        if (bladeTrail.length > 1) {
+            ctx.beginPath();
+            ctx.moveTo(bladeTrail[0].x, bladeTrail[0].y);
+            for (let i = 1; i < bladeTrail.length; i++) {
+                ctx.lineTo(bladeTrail[i].x, bladeTrail[i].y);
+            }
+            ctx.strokeStyle = freezeTimer > 0 ? '#9b59b6' : '#00d2d3';
+            ctx.lineWidth = 6;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.shadowColor = freezeTimer > 0 ? '#8e44ad' : '#01a3a4';
+            ctx.shadowBlur = 12;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
