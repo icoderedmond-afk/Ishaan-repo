@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Slice & Dice!</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #111;
+      color: #fff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #game-container {
+      position: relative;
+    }
+    canvas {
+      background: linear-gradient(to bottom, #1e2022, #0d0e10);
+      border: 3px solid #444;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      cursor: crosshair;
+    }
+    #ui {
+      position: absolute;
+      top: 15px;
+      left: 20px;
+      right: 20px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 22px;
+      font-weight: bold;
+      pointer-events: none;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+    }
+    #game-over {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      display: none;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 30px 50px;
+      border-radius: 15px;
+      border: 2px solid #ff4757;
+    }
+    #game-over h1 {
+      margin: 0 0 10px 0;
+      color: #ff4757;
+      font-size: 36px;
+    }
+    #restart-btn {
+      margin-top: 20px;
+      padding: 10px 25px;
+      font-size: 18px;
+      font-weight: bold;
+      background: #2ed573;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.1s, background 0.2s;
+    }
+    #restart-btn:hover {
+      background: #26af5f;
+      transform: scale(1.05);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    <div id="ui">
+      <div id="score-display">Score: 0</div>
+      <div id="lives-display">Lives: ❤️❤️❤️</div>
+    </div>
+
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+    <div id="game-over">
+      <h1>GAME OVER</h1>
+      <p id="final-score">Final Score: 0</p>
+      <button id="restart-btn" onclick="resetGame()">Play Again</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const scoreEl = document.getElementById('score-display');
+    const livesEl = document.getElementById('lives-display');
+    const gameOverEl = document.getElementById('game-over');
+    const finalScoreEl = document.getElementById('final-score');
+
+    let score = 0;
+    let lives = 3;
+    let isGameOver = false;
+
+    // Slice trail track
+    let sliceTrail = [];
+    let isMouseDown = false;
+
+    // Targets and particles
+    let targets = [];
+    let particles = [];
+
+    const targetTypes = [
+      { color: '#ff4757', name: 'Watermelon', radius: 35, points: 10 },
+      { color: '#ffa502', name: 'Orange', radius: 28, points: 15 },
+      { color: '#2ed573', name: 'Lime', radius: 22, points: 20 },
+      { color: '#eccc68', name: 'Lemon', radius: 25, points: 15 }
+    ];
+
+    class Target {
+      constructor() {
+        const type = targetTypes[Math.floor(Math.random() * targetTypes.length)];
+        this.radius = type.radius;
+        this.color = type.color;
+        this.points = type.points;
+
+        this.x = Math.random() * (canvas.width - 100) + 50;
+        this.y = canvas.height + this.radius;
+
+        // Launch physics
+        this.vx = (Math.random() - 0.5) * 6;
+        this.vy = -(Math.random() * 4 + 13);
+        this.gravity = 0.25;
+
+        this.sliced = false;
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy += this.gravity;
+      }
+
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#fff';
+        ctx.stroke();
+        ctx.closePath();
+      }
+    }
+
+    class Particle {
+      constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.radius = Math.random() * 4 + 2;
+        this.vx = (Math.random() - 0.5) * 10;
+        this.vy = (Math.random() - 0.5) * 10;
+        this.alpha = 1;
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.alpha -= 0.03;
+      }
+
+      draw() {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.alpha);
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // Input Listeners
+    canvas.addEventListener('mousedown', (e) => {
+      isMouseDown = true;
+      addTrailPoint(e);
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (isMouseDown) {
+        addTrailPoint(e);
+        checkSlices();
+      }
+    });
+
+    canvas.addEventListener('mouseup', () => { isMouseDown = false; });
+    canvas.addEventListener('mouseleave', () => { isMouseDown = false; });
+
+    // Touch support for mobile
+    canvas.addEventListener('touchstart', (e) => {
+      isMouseDown = true;
+      addTrailPoint(e.touches[0]);
+    });
+    canvas.addEventListener('touchmove', (e) => {
+      if (isMouseDown) {
+        addTrailPoint(e.touches[0]);
+        checkSlices();
+      }
+    });
+    canvas.addEventListener('touchend', () => { isMouseDown = false; });
+
+    function addTrailPoint(e) {
+      const rect = canvas.getBoundingClientRect();
+      sliceTrail.push({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+        time: Date.now()
+      });
+    }
+
+    function createSplatter(x, y, color) {
+      for (let i = 0; i < 15; i++) {
+        particles.push(new Particle(x, y, color));
+      }
+    }
+
+    function checkSlices() {
+      if (sliceTrail.length < 2) return;
+      const lastPoint = sliceTrail[sliceTrail.length - 1];
+
+      targets.forEach((target) => {
+        if (!target.sliced) {
+          const dist = Math.hypot(lastPoint.x - target.x, lastPoint.y - target.y);
+          if (dist < target.radius) {
+            target.sliced = true;
+            score += target.points;
+            scoreEl.textContent = `Score: ${score}`;
+            createSplatter(target.x, target.y, target.color);
+          }
+        }
+      });
+    }
+
+    // Spawning timer
+    let spawnTimer = 0;
+    function handleSpawning() {
+      spawnTimer++;
+      if (spawnTimer % 60 === 0) { // Spawn roughly every second
+        const spawnCount = Math.floor(Math.random() * 2) + 1;
+        for (let i = 0; i < spawnCount; i++) {
+          targets.push(new Target());
+        }
+      }
+    }
+
+    function updateLivesDisplay() {
+      livesEl.textContent = `Lives: ${'❤️'.repeat(Math.max(0, lives))}`;
+    }
+
+    function triggerGameOver() {
+      isGameOver = true;
+      finalScoreEl.textContent = `Final Score: ${score}`;
+      gameOverEl.style.display = 'block';
+    }
+
+    function resetGame() {
+      score = 0;
+      lives = 3;
+      isGameOver = false;
+      targets = [];
+      particles = [];
+      sliceTrail = [];
+      scoreEl.textContent = 'Score: 0';
+      updateLivesDisplay();
+      gameOverEl.style.display = 'none';
+      requestAnimationFrame(gameLoop);
+    }
+
+    function gameLoop() {
+      if (isGameOver) return;
+
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Handle object spawning
+      handleSpawning();
+
+      // Clean old trail points
+      const now = Date.now();
+      sliceTrail = sliceTrail.filter(p => now - p.time < 150);
+
+      // Draw slice trail
+      if (sliceTrail.length > 1) {
+        ctx.beginPath();
+        ctx.moveTo(sliceTrail[0].x, sliceTrail[0].y);
+        for (let i = 1; i < sliceTrail.length; i++) {
+          ctx.lineTo(sliceTrail[i].x, sliceTrail[i].y);
+        }
+        ctx.strokeStyle = '#00d2d3';
+        ctx.lineWidth = 5;
+        ctx.lineCap = 'round';
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#00d2d3';
+        ctx.stroke();
+        ctx.shadowBlur = 0; // reset
+      }
+
+      // Update & draw targets
+      for (let i = targets.length - 1; i >= 0; i--) {
+        const t = targets[i];
+        t.update();
+        if (!t.sliced) {
+          t.draw();
+        }
+
+        // Check if target fell off bottom without being sliced
+        if (t.y - t.radius > canvas.height) {
+          if (!t.sliced) {
+            lives--;
+            updateLivesDisplay();
+            if (lives <= 0) {
+              triggerGameOver();
+            }
+          }
+          targets.splice(i, 1);
+        } else if (t.sliced) {
+          targets.splice(i, 1);
+        }
+      }
+
+      // Update & draw particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.update();
+        p.draw();
+        if (p.alpha <= 0) {
+          particles.splice(i, 1);
+        }
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Start game loop
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>
