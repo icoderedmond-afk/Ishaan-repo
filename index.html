@@ -193,19 +193,20 @@
     let frameCount = 0;
 
     // Freeze Effect State
+    const TOTAL_FREEZE_TIME = 5000;
     let freezeTimer = 0; // Milliseconds remaining for freeze effect
 
     // Slicer Blade Trail
     let bladeTrail = [];
     let isMouseDown = false;
 
-    // Fruit definitions
+    // Fruit definitions with multi-tone colors, shading accents, and details
     const FRUIT_TYPES = [
-        { name: 'watermelon', color: '#27ae60', innerColor: '#e74c3c', radius: 35, score: 10 },
-        { name: 'orange', color: '#e67e22', innerColor: '#f39c12', radius: 28, score: 10 },
-        { name: 'apple', color: '#c0392b', innerColor: '#f1c40f', radius: 25, score: 10 },
-        { name: 'lemon', color: '#f1c40f', innerColor: '#f39c12', radius: 22, score: 15 },
-        { name: 'coconut', color: '#7f8c8d', innerColor: '#ecf0f1', radius: 30, score: 15 }
+        { name: 'watermelon', color: '#1e824c', darkColor: '#145a32', innerColor: '#e74c3c', radius: 35, score: 10, stripeColor: '#0e3a21' },
+        { name: 'orange', color: '#f39c12', darkColor: '#d35400', innerColor: '#e67e22', radius: 28, score: 10 },
+        { name: 'apple', color: '#e74c3c', darkColor: '#922b21', innerColor: '#f9e79f', radius: 25, score: 10 },
+        { name: 'lemon', color: '#f4d03f', darkColor: '#b7950b', innerColor: '#fef9e7', radius: 22, score: 15 },
+        { name: 'coconut', color: '#5d4037', darkColor: '#3e2723', innerColor: '#f5f5f5', radius: 30, score: 15 }
     ];
 
     const ICE_BANANA_TYPE = { name: 'ice_banana', color: '#f1c40f', innerColor: '#00d2d3', radius: 26, score: 25, isSpecial: true };
@@ -272,42 +273,55 @@
             ctx.rotate(this.rotation);
 
             if (this.isBomb) {
-                // Draw Bomb
+                // Spherical Bomb with Shading
+                const bgGrad = ctx.createRadialGradient(-this.radius * 0.3, -this.radius * 0.3, 2, 0, 0, this.radius);
+                bgGrad.addColorStop(0, '#555');
+                bgGrad.addColorStop(0.5, '#222');
+                bgGrad.addColorStop(1, '#050505');
+
                 ctx.beginPath();
                 ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
-                ctx.fillStyle = '#222';
+                ctx.fillStyle = bgGrad;
                 ctx.fill();
-                ctx.lineWidth = 3;
-                ctx.strokeStyle = '#555';
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#444';
                 ctx.stroke();
 
-                // Fuse
+                // Fuse Cap & Fuse
+                ctx.fillStyle = '#888';
+                ctx.fillRect(-4, -this.radius - 2, 8, 4);
+
                 ctx.beginPath();
-                ctx.moveTo(0, -this.radius);
-                ctx.quadraticCurveTo(10, -this.radius - 10, 5, -this.radius - 18);
+                ctx.moveTo(0, -this.radius - 2);
+                ctx.quadraticCurveTo(10, -this.radius - 12, 5, -this.radius - 18);
                 ctx.lineWidth = 3;
-                ctx.strokeStyle = '#8e44ad';
+                ctx.strokeStyle = '#a67c52';
                 ctx.stroke();
 
-                // Spark
+                // Fuse Spark Glow
                 ctx.beginPath();
-                ctx.arc(5, -this.radius - 18, 4 + Math.random() * 3, 0, Math.PI * 2);
-                ctx.fillStyle = Math.random() > 0.5 ? '#f39c12' : '#e74c3c';
+                ctx.arc(5, -this.radius - 18, 6 + Math.random() * 2, 0, Math.PI * 2);
+                ctx.fillStyle = Math.random() > 0.5 ? 'rgba(243, 156, 18, 0.8)' : 'rgba(231, 76, 60, 0.8)';
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.arc(5, -this.radius - 18, 3, 0, Math.PI * 2);
+                ctx.fillStyle = '#fff';
                 ctx.fill();
             } else if (this.isIceBanana) {
-                // Draw Blue & Yellow Striped Banana
-                const w = this.radius * 2.2;
+                // Blue & Yellow Striped Ice Banana with shading
+                const w = this.radius * 2.3;
                 const h = this.radius * 1.1;
 
-                // Draw Base Banana Shape
+                // Base Banana Shape
                 ctx.beginPath();
                 ctx.ellipse(0, 0, w / 2, h / 2, Math.PI / 6, 0, Math.PI * 2);
                 
-                // Blue and Yellow Stripes Fill using Clip Path
                 ctx.save();
                 ctx.clip();
                 
-                ctx.fillStyle = '#f1c40f'; // Yellow base
+                // Yellow base
+                ctx.fillStyle = '#f1c40f';
                 ctx.fillRect(-w, -h, w * 2, h * 2);
 
                 // Blue Stripes
@@ -317,22 +331,73 @@
                     ctx.rect(i, -h, 6, h * 2);
                     ctx.fill();
                 }
+
+                // 3D Shading Overlay
+                const bananaGrad = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+                bananaGrad.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
+                bananaGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0)');
+                bananaGrad.addColorStop(1, 'rgba(0, 0, 0, 0.45)');
+                
+                ctx.fillStyle = bananaGrad;
+                ctx.fillRect(-w, -h, w * 2, h * 2);
                 ctx.restore();
 
-                ctx.lineWidth = 2;
-                ctx.strokeStyle = '#2980b9';
-                ctx.stroke();
-            } else {
-                // Draw Standard Fruit
+                // Stem & tip
+                ctx.fillStyle = '#00778a';
                 ctx.beginPath();
-                ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
-                ctx.fillStyle = this.color;
+                ctx.arc(-w/2.1, h/4, 4, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Highlight
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#00a8a8';
+                ctx.stroke();
+            } else {
+                // Detailed Standard Fruit with Spherical Radial Gradient Shading
+                const r = this.radius;
+                const grad = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r);
+                grad.addColorStop(0, '#ffffff');
+                grad.addColorStop(0.2, this.type.color);
+                grad.addColorStop(0.85, this.type.darkColor);
+                grad.addColorStop(1, '#000000');
+
                 ctx.beginPath();
-                ctx.arc(-this.radius * 0.3, -this.radius * 0.3, this.radius * 0.3, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.arc(0, 0, r, 0, Math.PI * 2);
+                ctx.fillStyle = grad;
+                ctx.fill();
+
+                // Extra Fruit Specific Details
+                if (this.type.name === 'watermelon') {
+                    // Dark Green Stripes
+                    ctx.save();
+                    ctx.clip();
+                    ctx.strokeStyle = this.type.stripeColor;
+                    ctx.lineWidth = 4;
+                    for (let a = -Math.PI; a < Math.PI; a += Math.PI / 3) {
+                        ctx.beginPath();
+                        ctx.arc(0, 0, r - 3, a, a + Math.PI / 6);
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                } else if (this.type.name === 'coconut') {
+                    // Texture lines & eyes
+                    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                    ctx.beginPath();
+                    ctx.arc(-6, -6, 3, 0, Math.PI * 2);
+                    ctx.arc(4, -8, 2.5, 0, Math.PI * 2);
+                    ctx.arc(-1, 2, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (this.type.name === 'apple' || this.type.name === 'lemon') {
+                    // Tiny stem / leaf
+                    ctx.fillStyle = '#27ae60';
+                    ctx.beginPath();
+                    ctx.ellipse(0, -r + 2, 5, 2.5, -Math.PI / 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // Smooth Highlight Reflection Crescent
+                ctx.beginPath();
+                ctx.arc(-r * 0.35, -r * 0.35, r * 0.25, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
                 ctx.fill();
             }
 
@@ -347,7 +412,7 @@
             this.type = type;
             this.isLeft = isLeft;
             this.radius = type.radius;
-            this.isHalf = true; // Mark as half piece so it cannot be sliced again
+            this.isHalf = true; // Cannot be sliced again
             
             this.vx = (vx + (isLeft ? -2 : 2) + (Math.random() - 0.5)) * 0.5;
             this.vy = (-2 - Math.random() * 2) * SPEED_MULT;
@@ -370,19 +435,35 @@
             ctx.translate(this.x, this.y);
             ctx.rotate(this.rotation);
 
-            // Draw half circle
+            const r = this.radius;
+
+            // Outer Peel Half Circle with Gradient Shading
+            const peelGrad = ctx.createRadialGradient(-r * 0.2, -r * 0.2, r * 0.1, 0, 0, r);
+            peelGrad.addColorStop(0, this.type.color);
+            peelGrad.addColorStop(1, this.type.darkColor || '#111');
+
             ctx.beginPath();
-            ctx.arc(0, 0, this.radius, this.isLeft ? Math.PI / 2 : -Math.PI / 2, this.isLeft ? -Math.PI / 2 : Math.PI / 2);
+            ctx.arc(0, 0, r, this.isLeft ? Math.PI / 2 : -Math.PI / 2, this.isLeft ? -Math.PI / 2 : Math.PI / 2);
             ctx.closePath();
-            ctx.fillStyle = this.type.color;
+            ctx.fillStyle = peelGrad;
             ctx.fill();
 
-            // Inner pulp
+            // Inner Flesh / Pulp
             ctx.beginPath();
-            ctx.arc(0, 0, this.radius * 0.8, this.isLeft ? Math.PI / 2 : -Math.PI / 2, this.isLeft ? -Math.PI / 2 : Math.PI / 2);
+            ctx.arc(0, 0, r * 0.82, this.isLeft ? Math.PI / 2 : -Math.PI / 2, this.isLeft ? -Math.PI / 2 : Math.PI / 2);
             ctx.closePath();
             ctx.fillStyle = this.type.innerColor;
             ctx.fill();
+
+            // Seeds / Inner Pulp details
+            if (this.type.name === 'watermelon' || this.type.name === 'apple') {
+                ctx.fillStyle = '#222';
+                const sideMult = this.isLeft ? -1 : 1;
+                ctx.beginPath();
+                ctx.arc(sideMult * r * 0.3, -r * 0.2, 2, 0, Math.PI * 2);
+                ctx.arc(sideMult * r * 0.4, r * 0.2, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
 
             ctx.restore();
         }
@@ -396,9 +477,9 @@
             this.radius = Math.random() * 4 + 2;
             this.vx = (Math.random() - 0.5) * 8;
             this.vy = (Math.random() - 0.5) * 8;
-            this.gravity = 0.2; // Full normal speed gravity
+            this.gravity = 0.2; // Normal speed explosion gravity
             this.alpha = 1;
-            this.decay = Math.random() * 0.03 + 0.015; // Full normal speed decay
+            this.decay = Math.random() * 0.03 + 0.015;
         }
 
         update() {
@@ -511,17 +592,15 @@
         for (let i = items.length - 1; i >= 0; i--) {
             const item = items[i];
             
-            // Skip already sliced fruit pieces (HalfFruit)
+            // Skip already sliced fruit pieces
             if (item.isHalf) continue;
 
             if (lineIntersectsCircle(p1, p2, item)) {
                 if (item.isBomb) {
-                    // Slicing 1 bomb immediately ends the game
                     explodeBomb(item.x, item.y);
                     endGame();
                     return;
                 } else {
-                    // Slice Fruit
                     sliceFruit(item, i);
                 }
             }
@@ -535,7 +614,7 @@
 
         // Trigger Freeze Effect if Ice Banana is sliced
         if (fruit.isIceBanana) {
-            freezeTimer = 5000; // 5 Seconds freeze duration
+            freezeTimer = TOTAL_FREEZE_TIME; // 5 Seconds freeze duration
             gameContainer.classList.add('frozen');
             freezeIndicator.style.display = 'block';
         }
@@ -544,7 +623,7 @@
         splatters.push(new Splatter(fruit.x, fruit.y, fruit.type.innerColor));
         if (splatters.length > 10) splatters.shift();
 
-        // Spawn Half Fruits (marked with isHalf = true so they cannot be sliced)
+        // Spawn Half Fruits (cannot be sliced again)
         items.push(new HalfFruit(fruit.x, fruit.y, fruit.type, true, fruit.vx));
         items.push(new HalfFruit(fruit.x, fruit.y, fruit.type, false, fruit.vx));
 
@@ -600,6 +679,82 @@
         freezeIndicator.style.display = 'none';
     }
 
+    // Function to render the dynamic melting ice border & frost vignette
+    function drawIceVignette(ratio) {
+        ctx.save();
+        
+        const w = canvas.width;
+        const h = canvas.height;
+        const maxBorder = 70 * ratio; // Ice thickness melts down as ratio approaches 0
+
+        // Frost Inner Vignette
+        const vignetteGrad = ctx.createRadialGradient(
+            w / 2, h / 2, Math.min(w, h) * 0.3,
+            w / 2, h / 2, Math.max(w, h) * 0.6
+        );
+        vignetteGrad.addColorStop(0, 'rgba(0, 210, 211, 0)');
+        vignetteGrad.addColorStop(0.7, `rgba(0, 210, 211, ${0.15 * ratio})`);
+        vignetteGrad.addColorStop(1, `rgba(224, 255, 255, ${0.45 * ratio})`);
+
+        ctx.fillStyle = vignetteGrad;
+        ctx.fillRect(0, 0, w, h);
+
+        // Frozen Edge Icicles & Frost Border
+        ctx.fillStyle = `rgba(220, 245, 255, ${0.75 * ratio})`;
+        ctx.strokeStyle = `rgba(0, 210, 211, ${0.9 * ratio})`;
+        ctx.lineWidth = 3;
+
+        // Top Ice Edge
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        for (let x = 0; x <= w; x += 25) {
+            const jagged = Math.sin(x * 0.05 + freezeTimer * 0.002) * 15 * ratio;
+            ctx.lineTo(x, maxBorder + jagged);
+        }
+        ctx.lineTo(w, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Bottom Ice Edge
+        ctx.beginPath();
+        ctx.moveTo(0, h);
+        for (let x = 0; x <= w; x += 25) {
+            const jagged = Math.cos(x * 0.05 + freezeTimer * 0.002) * 15 * ratio;
+            ctx.lineTo(x, h - maxBorder - jagged);
+        }
+        ctx.lineTo(w, h);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Left Ice Edge
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        for (let y = 0; y <= h; y += 25) {
+            const jagged = Math.sin(y * 0.05 + freezeTimer * 0.002) * 15 * ratio;
+            ctx.lineTo(maxBorder + jagged, y);
+        }
+        ctx.lineTo(0, h);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Right Ice Edge
+        ctx.beginPath();
+        ctx.moveTo(w, 0);
+        for (let y = 0; y <= h; y += 25) {
+            const jagged = Math.cos(y * 0.05 + freezeTimer * 0.002) * 15 * ratio;
+            ctx.lineTo(w - maxBorder - jagged, y);
+        }
+        ctx.lineTo(w, h);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
     let lastTime = performance.now();
 
     // Main Game Loop
@@ -653,6 +808,12 @@
                     items.splice(i, 1);
                 }
             }
+        }
+
+        // Render Melting Ice Overlay when Frozen
+        if (freezeTimer > 0) {
+            const freezeRatio = Math.max(0, freezeTimer / TOTAL_FREEZE_TIME);
+            drawIceVignette(freezeRatio);
         }
 
         // Particles
