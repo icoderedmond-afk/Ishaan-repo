@@ -31,6 +31,11 @@
             overflow: hidden;
             background: radial-gradient(circle, #2c1b18 0%, #120a08 100%);
             border: 4px solid #4a2e1b;
+            transition: border-color 0.3s ease;
+        }
+        #game-container.frozen {
+            border-color: #00d2d3;
+            box-shadow: 0 0 25px rgba(0, 210, 211, 0.5);
         }
         canvas {
             display: block;
@@ -63,7 +68,19 @@
         }
         .lives-board {
             color: #e74c3c;
-            letter-spacing: 5px;
+            letter-spacing: 3px;
+            font-size: 20px;
+        }
+        .freeze-indicator {
+            position: absolute;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #00d2d3;
+            font-size: 20px;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(0,210,211,0.8);
+            display: none;
         }
         .overlay {
             position: absolute;
@@ -134,14 +151,15 @@
     <div class="ui-layer">
         <div class="hud">
             <div class="score-board">🍉 <span id="scoreText">0</span></div>
-            <div class="lives-board" id="livesText">❌ ❌ ❌</div>
+            <div class="lives-board" id="livesText">❌ ❌ ❌ ❌ ❌</div>
         </div>
+        <div id="freezeIndicator" class="freeze-indicator">❄️ FROZEN! ❄️</div>
     </div>
 
     <!-- Start Menu Overlay -->
     <div id="startOverlay" class="overlay">
         <h1 class="title">Fruit Ninja</h1>
-        <p class="subtitle">Slice fruits with your mouse or finger. Don't hit the bombs!</p>
+        <p class="subtitle">Slice fruits with your mouse or finger. Avoid bombs & watch for the Ice Banana!</p>
         <button class="btn" onclick="startGame()">Play Game</button>
     </div>
 
@@ -154,12 +172,14 @@
 </div>
 
 <script>
+    const gameContainer = document.getElementById('game-container');
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
     // UI elements
     const scoreText = document.getElementById('scoreText');
     const livesText = document.getElementById('livesText');
+    const freezeIndicator = document.getElementById('freezeIndicator');
     const startOverlay = document.getElementById('startOverlay');
     const gameOverOverlay = document.getElementById('gameOverOverlay');
     const finalScore = document.getElementById('finalScore');
@@ -167,10 +187,13 @@
     // Game state
     let gameActive = false;
     let score = 0;
-    let lives = 3;
+    let lives = 5;
     let spawnTimer = 0;
-    let spawnInterval = 90; // frames
+    let spawnInterval = 110; // frames
     let frameCount = 0;
+
+    // Freeze Effect State
+    let freezeTimer = 0; // Milliseconds remaining for freeze effect
 
     // Slicer Blade Trail
     let bladeTrail = [];
@@ -185,6 +208,8 @@
         { name: 'coconut', color: '#7f8c8d', innerColor: '#ecf0f1', radius: 30, score: 15 }
     ];
 
+    const ICE_BANANA_TYPE = { name: 'ice_banana', color: '#f1c40f', innerColor: '#00d2d3', radius: 26, score: 25, isSpecial: true };
+
     let items = [];
     let particles = [];
     let splatters = [];
@@ -192,11 +217,17 @@
     // Class Definitions
     class Item {
         constructor() {
-            this.isBomb = Math.random() < 0.18; // 18% chance of bomb
-            
+            const rand = Math.random();
+            this.isBomb = rand < 0.18; // 18% chance of bomb
+            this.isIceBanana = !this.isBomb && rand > 0.85; // 15% chance of Ice Banana
+
             if (this.isBomb) {
                 this.radius = 25;
                 this.color = '#333';
+            } else if (this.isIceBanana) {
+                this.type = ICE_BANANA_TYPE;
+                this.radius = this.type.radius;
+                this.color = this.type.color;
             } else {
                 this.type = FRUIT_TYPES[Math.floor(Math.random() * FRUIT_TYPES.length)];
                 this.radius = this.type.radius;
@@ -207,21 +238,26 @@
             this.x = Math.random() * (canvas.width - 160) + 80;
             this.y = canvas.height + this.radius;
 
-            // Velocity (arc trajectory)
+            // Velocity scaled down by ~0.3x for slower floats
             const targetX = canvas.width / 2 + (Math.random() * 200 - 100);
             const targetY = Math.random() * 150 + 100;
             
-            const timeToPeak = 45 + Math.random() * 15;
-            this.vx = (targetX - this.x) / (timeToPeak * 2);
-            this.vy = -Math.sqrt(2 * 0.35 * (canvas.height - targetY));
+            const timeToPeak = (45 + Math.random() * 15) / 0.3; // Extended flight duration
+            this.vx = ((targetX - this.x) / (timeToPeak * 2)) * 0.3;
+            
+            // Reduced gravity & lower initial upward velocity (0.3x multiplier)
+            this.gravity = 0.35 * 0.3;
+            this.vy = -Math.sqrt(2 * this.gravity * (canvas.height - targetY));
 
-            this.gravity = 0.35;
             this.rotation = 0;
-            this.vRot = (Math.random() - 0.5) * 0.1;
+            this.vRot = ((Math.random() - 0.5) * 0.1) * 0.3;
             this.sliced = false;
         }
 
         update() {
+            // Pause physics when frozen
+            if (freezeTimer > 0) return;
+
             this.x += this.vx;
             this.y += this.vy;
             this.vy += this.gravity;
@@ -256,8 +292,36 @@
                 ctx.arc(5, -this.radius - 18, 4 + Math.random() * 3, 0, Math.PI * 2);
                 ctx.fillStyle = Math.random() > 0.5 ? '#f39c12' : '#e74c3c';
                 ctx.fill();
+            } else if (this.isIceBanana) {
+                // Draw Blue & Yellow Striped Banana
+                const w = this.radius * 2.2;
+                const h = this.radius * 1.1;
+
+                // Draw Base Banana Shape
+                ctx.beginPath();
+                ctx.ellipse(0, 0, w / 2, h / 2, Math.PI / 6, 0, Math.PI * 2);
+                
+                // Blue and Yellow Stripes Fill using Clip Path
+                ctx.save();
+                ctx.clip();
+                
+                ctx.fillStyle = '#f1c40f'; // Yellow base
+                ctx.fillRect(-w, -h, w * 2, h * 2);
+
+                // Blue Stripes
+                ctx.fillStyle = '#00d2d3';
+                for (let i = -w; i < w; i += 12) {
+                    ctx.beginPath();
+                    ctx.rect(i, -h, 6, h * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#2980b9';
+                ctx.stroke();
             } else {
-                // Draw Fruit Outer
+                // Draw Standard Fruit
                 ctx.beginPath();
                 ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
                 ctx.fillStyle = this.color;
@@ -282,14 +346,16 @@
             this.isLeft = isLeft;
             this.radius = type.radius;
             
-            this.vx = vx + (isLeft ? -3 : 3) + (Math.random() - 0.5);
-            this.vy = -3 - Math.random() * 2;
-            this.gravity = 0.4;
+            this.vx = (vx + (isLeft ? -2 : 2) + (Math.random() - 0.5)) * 0.5;
+            this.vy = (-2 - Math.random() * 2) * 0.3;
+            this.gravity = 0.35 * 0.3;
             this.rotation = Math.random() * Math.PI;
-            this.vRot = (isLeft ? -0.15 : 0.15) + (Math.random() - 0.5) * 0.05;
+            this.vRot = ((isLeft ? -0.15 : 0.15) + (Math.random() - 0.5) * 0.05) * 0.3;
         }
 
         update() {
+            if (freezeTimer > 0) return;
+
             this.x += this.vx;
             this.y += this.vy;
             this.vy += this.gravity;
@@ -325,9 +391,9 @@
             this.y = y;
             this.color = color;
             this.radius = Math.random() * 4 + 2;
-            this.vx = (Math.random() - 0.5) * 10;
-            this.vy = (Math.random() - 0.5) * 10;
-            this.gravity = 0.2;
+            this.vx = (Math.random() - 0.5) * 8;
+            this.vy = (Math.random() - 0.5) * 8;
+            this.gravity = 0.1;
             this.alpha = 1;
             this.decay = Math.random() * 0.03 + 0.015;
         }
@@ -414,7 +480,7 @@
 
     canvas.addEventListener('touchend', () => { isMouseDown = false; });
 
-    // Collision Detection (Point to Line Segment Distance)
+    // Line segment to circle intersection test
     function lineIntersectsCircle(p1, p2, circle) {
         const dx = p2.x - p1.x;
         const dy = p2.y - p1.y;
@@ -443,7 +509,7 @@
             const item = items[i];
             if (lineIntersectsCircle(p1, p2, item)) {
                 if (item.isBomb) {
-                    // Trigger Bomb
+                    // Slicing 1 bomb immediately ends the game
                     explodeBomb(item.x, item.y);
                     endGame();
                     return;
@@ -460,6 +526,13 @@
         score += fruit.type.score;
         scoreText.innerText = score;
 
+        // Trigger Freeze Effect if Ice Banana is sliced
+        if (fruit.isIceBanana) {
+            freezeTimer = 5000; // 5 Seconds freeze duration
+            gameContainer.classList.add('frozen');
+            freezeIndicator.style.display = 'block';
+        }
+
         // Splatter background effect
         splatters.push(new Splatter(fruit.x, fruit.y, fruit.type.innerColor));
         if (splatters.length > 10) splatters.shift();
@@ -469,13 +542,12 @@
         items.push(new HalfFruit(fruit.x, fruit.y, fruit.type, false, fruit.vx));
 
         // Spawn Juice Particles
-        for (let i = 0; i < 12; i++) {
+        for (let i = 0; i < 14; i++) {
             particles.push(new Particle(fruit.x, fruit.y, fruit.type.innerColor));
         }
     }
 
     function explodeBomb(x, y) {
-        // Flash screen
         ctx.fillStyle = '#fff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -486,7 +558,7 @@
 
     function updateLivesUI() {
         let text = '';
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < 5; i++) {
             text += (i < lives) ? '❌ ' : '⚪ ';
         }
         livesText.innerText = text.trim();
@@ -494,13 +566,17 @@
 
     function startGame() {
         score = 0;
-        lives = 3;
+        lives = 5; // Updated to 5 lives
         items = [];
         particles = [];
         splatters = [];
         bladeTrail = [];
         frameCount = 0;
+        freezeTimer = 0;
         gameActive = true;
+
+        gameContainer.classList.remove('frozen');
+        freezeIndicator.style.display = 'none';
 
         scoreText.innerText = score;
         updateLivesUI();
@@ -513,10 +589,27 @@
         gameActive = false;
         finalScore.innerText = score;
         gameOverOverlay.classList.remove('hidden');
+        gameContainer.classList.remove('frozen');
+        freezeIndicator.style.display = 'none';
     }
 
+    let lastTime = performance.now();
+
     // Main Game Loop
-    function gameLoop() {
+    function gameLoop(currentTime) {
+        const deltaTime = currentTime - lastTime;
+        lastTime = currentTime;
+
+        // Handle Freeze Timer
+        if (freezeTimer > 0) {
+            freezeTimer -= deltaTime;
+            if (freezeTimer <= 0) {
+                freezeTimer = 0;
+                gameContainer.classList.remove('frozen');
+                freezeIndicator.style.display = 'none';
+            }
+        }
+
         // Clear Canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -524,16 +617,15 @@
         splatters.forEach(s => s.draw());
 
         if (gameActive) {
-            frameCount++;
-
-            // Spawn Logic
-            if (frameCount % spawnInterval === 0) {
-                const count = Math.floor(Math.random() * 3) + 1; // Spawn 1-3 fruits
-                for (let i = 0; i < count; i++) {
-                    items.push(new Item());
+            // Spawn items only when not frozen
+            if (freezeTimer <= 0) {
+                frameCount++;
+                if (frameCount % spawnInterval === 0) {
+                    const count = Math.floor(Math.random() * 2) + 1;
+                    for (let i = 0; i < count; i++) {
+                        items.push(new Item());
+                    }
                 }
-                // Gradually increase speed
-                if (spawnInterval > 40 && frameCount % 300 === 0) spawnInterval -= 5;
             }
 
             // Update & Render Items
@@ -566,7 +658,7 @@
 
         // Draw Blade Trail
         const now = Date.now();
-        bladeTrail = bladeTrail.filter(p => now - p.time < 150); // Keep points for 150ms
+        bladeTrail = bladeTrail.filter(p => now - p.time < 150);
 
         if (bladeTrail.length > 1) {
             ctx.beginPath();
@@ -574,20 +666,19 @@
             for (let i = 1; i < bladeTrail.length; i++) {
                 ctx.lineTo(bladeTrail[i].x, bladeTrail[i].y);
             }
-            ctx.strokeStyle = '#00d2d3';
+            ctx.strokeStyle = freezeTimer > 0 ? '#9b59b6' : '#00d2d3';
             ctx.lineWidth = 6;
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
-            ctx.shadowColor = '#01a3a4';
+            ctx.shadowColor = freezeTimer > 0 ? '#8e44ad' : '#01a3a4';
             ctx.shadowBlur = 12;
             ctx.stroke();
-            ctx.shadowBlur = 0; // Reset
+            ctx.shadowBlur = 0;
         }
 
         requestAnimationFrame(gameLoop);
     }
 
-    // Start Animation Frame Loop
     requestAnimationFrame(gameLoop);
 </script>
 </body>
